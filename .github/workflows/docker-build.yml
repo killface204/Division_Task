@@ -1,0 +1,98 @@
+name: Build and push Docker image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'   # triggers when you push a tag like v1.2.3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1) Test: Check Dockerfile exists
+      - name: Check Dockerfile exists
+        run: |
+          if [ ! -f Dockerfile ]; then
+            echo "❌ Dockerfile not found"
+            exit 1
+          fi
+          echo "✅ Dockerfile found"
+
+      # Define image name and versions
+      - name: Set image metadata
+        id: meta
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/$(echo ${{ github.event.repository.name }} | tr '[:upper:]' '[:lower:]')"
+
+          SHA_TAG=${{ github.sha }}
+          BRANCH_TAG=$(echo "${{ github.ref_name }}" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION_TAG=${{ github.ref_name }}
+          else
+            VERSION_TAG=""
+          fi
+
+          echo "image_name=$IMAGE" >> $GITHUB_OUTPUT
+          echo "sha_tag=$SHA_TAG" >> $GITHUB_OUTPUT
+          echo "branch_tag=$BRANCH_TAG" >> $GITHUB_OUTPUT
+          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+
+
+      # 2) Build Docker image (once)
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ steps.meta.outputs.image_name }}:latest .
+
+      # 3) Login to GHCR
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4) Tag and push versioned images
+      - name: Tag & push versioned images
+        run: |
+          IMAGE=${{ steps.meta.outputs.image_name }}
+
+          echo "Tagging latest -> $IMAGE:latest"
+          docker tag $IMAGE:latest $IMAGE:latest
+
+          echo "Tagging sha -> $IMAGE:${{ steps.meta.outputs.sha_tag }}"
+          docker tag $IMAGE:latest $IMAGE:${{ steps.meta.outputs.sha_tag }}
+
+          echo "Tagging branch -> $IMAGE:${{ steps.meta.outputs.branch_tag }}"
+          docker tag $IMAGE:latest $IMAGE:${{ steps.meta.outputs.branch_tag }}
+
+          # semver tag only on release tags
+          if [ -n "${{ steps.meta.outputs.version_tag }}" ]; then
+            echo "Tagging version -> $IMAGE:${{ steps.meta.outputs.version_tag }}"
+            docker tag $IMAGE:latest $IMAGE:${{ steps.meta.outputs.version_tag }}
+          fi
+
+          echo "Pushing latest"
+          docker push $IMAGE:latest
+
+          echo "Pushing sha"
+          docker push $IMAGE:${{ steps.meta.outputs.sha_tag }}
+
+          echo "Pushing branch"
+          docker push $IMAGE:${{ steps.meta.outputs.branch_tag }}
+
+          if [ -n "${{ steps.meta.outputs.version_tag }}" ]; then
+            echo "Pushing version"
+            docker push $IMAGE:${{ steps.meta.outputs.version_tag }}
+          fi

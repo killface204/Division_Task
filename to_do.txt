@@ -1,0 +1,4 @@
+create script for testing tasks
+- should read yaml file
+- make sure that input and output exists
+- create temp workflow file with user requested inputs

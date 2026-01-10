@@ -1,0 +1,12 @@
+name: divide
+
+inputs:
+  - name: input_num
+    type: num
+    required: true
+
+
+outputs:
+  - name: quotient
+    type: num
+    required: true
