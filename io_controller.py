@@ -1,15 +1,25 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 import yaml
+import requests
+import json 
 
 DOC_ID = "doHX26bnzu9iIIKAyVlE"
 
-# Path to the JSON key you downloaded
-SERVICE_ACCOUNT_PATH = "task-automation-aaec5-firebase-adminsdk-fbsvc-0163f9aff4.json"
+url = "https://api.doppler.com/v3/configs/config/secret?project=task-automation&config=dev&name=FIREBASE_CREDS"
+
+headers = {
+    "accept": "application/json",
+    "authorization": "Bearer dp.pt.qrAvsDDw6E8EWeeTUV8LHJ6FKUY19zD7v6a1iV8U5mX "
+}
+
+response = requests.get(url, headers=headers)
+result = response.json()
+
 
 # Only initialize once in your process
 if not firebase_admin._apps:
-    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+    cred = credentials.Certificate(json.loads(result['value']['computed']))
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
